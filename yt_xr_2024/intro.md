@@ -1,11 +1,15 @@
-# Welcome to your Jupyter Book
+# yt_xarray: Facilitating Software Reuse Between Space and Earth Sciences
 
-This is a small sample book to give you a feel for how book content is
-structured.
-It shows off a few of the major file types, as well as some sample content.
-It does not go in-depth into any particular topic - check out [the Jupyter Book documentation](https://jupyterbook.org) for more information.
+## Authors
 
-Check out the content pages bundled with this sample book to see more.
+* Chris Havlin: University of Illinois Urbana-Champaign, School of Information Sciences,
+* Matt Turk: University of Illinois Urbana-Champaign, School of Information Sciences, 
+
+## Abstract
+
+Copy/Paste
+
 
 ```{tableofcontents}
 ```
+
