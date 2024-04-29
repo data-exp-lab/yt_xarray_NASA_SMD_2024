@@ -6,7 +6,7 @@ root: intro
 chapters:
 - file: intro-to-yt-xr-and-yt-xr
 - file: yt-xr-dev-01-recent
-- file: yt-xr-dev-02-transformations
+- file: yt-xr-dev-02-transformations-nb
 - file: yt-xr-dev-03-cloud-native
 - file: summary
 - file: technical-info

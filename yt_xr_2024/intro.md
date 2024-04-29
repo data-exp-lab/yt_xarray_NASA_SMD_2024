@@ -10,6 +10,3 @@
 Copy/Paste
 
 
-```{tableofcontents}
-```
-

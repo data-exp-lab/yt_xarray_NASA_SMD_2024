@@ -3,6 +3,7 @@
 
 title: yt_xarray, Facilitating Software Reuse Between Space and Earth Sciences
 author: Chris Havlin & Matt Turk
+only_build_toc_files: true
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
