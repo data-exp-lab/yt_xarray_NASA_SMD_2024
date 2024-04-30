@@ -39,9 +39,9 @@ dsx0 = dsx.isel({'time':0})
 slc = dsx0.yt.SlicePlot('altitude', 'T', window_size=(4,2))
 slc.set_log('T', False)
 slc.set_zlim('T', 200, 300)
-
+_ = slc.save()
 ```
-
+![](UniformGridData_Slice_altitude_T.png)
 
 **yt: geoquiver**: 
 
@@ -51,9 +51,9 @@ ds = dsx.yt.load_grid(fields=['U', 'V'], sel_dict={'time':0}, use_callable=False
 slc = yt.SlicePlot(ds, 'altitude', 'U', window_size=(4,2))
 slc.set_log('U', False)
 slc.annotate_quiver('U', 'V')
-slc.show()
+_ = slc.save()
 ```
-
+![](UniformGridData_Slice_altitude_U.png)
 **yt: cartesian cutting plane**:
 
 

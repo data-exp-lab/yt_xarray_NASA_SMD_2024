@@ -1,7 +1,7 @@
 # Book settings
 # Learn more at https://jupyterbook.org/customize/config.html
 
-title: yt_xarray, Facilitating Software Reuse Between Space and Earth Sciences
+title: yt-xarray, Facilitating Software Reuse Between Space and Earth Sciences
 author: Chris Havlin & Matt Turk
 only_build_toc_files: true
 
@@ -13,7 +13,14 @@ execute:
 # Define the name of the latex output file for PDF builds
 latex:
   latex_documents:
-    targetname: yt_xr_2024_NASA_Software.tex
+    targetname: yt_xr_2024.tex
+
+# additioanl latex options via sphinx conifg (only affects
+# building pdf with pdflatex)
+sphinx:
+  config:
+    latex_elements:
+      extraclassoptions: openany, oneside  # remove blank pages between chapters
 
 # Add a bibtex file so that we can create citations
 bibtex_bibfiles:

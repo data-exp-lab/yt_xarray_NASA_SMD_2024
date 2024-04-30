@@ -163,3 +163,4 @@ yt_xr_2024/_build/*
 
 *.swp
 .DS_Store
+*_Slice_*.png
