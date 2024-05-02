@@ -4,3 +4,5 @@ yt[full]
 dask[complete]
 juptyerlab
 yt_idv
+cartopy
+shapely

@@ -2,11 +2,14 @@ import xarray as xr
 import yt_xarray
 import yt
 from yt_xarray import transformations as tf
-from scipy.spatial import cKDTree
 import numpy as np
 from typing import Optional, Union
 import unyt
 import os
+import cartopy
+from dask import delayed, compute
+from yt.visualization.volume_rendering.render_source import LineSource
+import shapely
 
 class ScaledGC(tf.GeocentricCartesian):
     def __init__(self,
@@ -131,7 +134,7 @@ def load_merra2_sample(time_index:int = 0, bbox_dict = None,
 
     add_extra_fields(ds_yt)
 
-    return dsx0, ds_yt
+    return dsx0, ds_yt, gc
 
 def add_extra_fields(ds_yt):
     def _QV_for_proj(field, data):
@@ -220,7 +223,7 @@ def create_dQV_vr(ds_yt, with_rots=True):
             sc.camera.rotate(drot * np.pi / 180, rot_center=sc.camera.focus)
             sc.save(f"volume_rendering_images/rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
 
-def create_RH_vr(ds_yt, nframes=100, save_dir=None):
+def create_RH_vr(ds_yt, gc:ScaledGC, nframes=100, save_dir=None, skip_render=False):
 
     if save_dir is None:
         save_dir = "volume_rendering_images"
@@ -229,6 +232,8 @@ def create_RH_vr(ds_yt, nframes=100, save_dir=None):
 
     fld = ('stream', 'RH_filtered')
     cmap = "cmyt.arbre"
+
+    lnsrc = build_state_line_sources(gc)
 
     sc = yt.create_scene(ds_yt,  field=fld)
 
@@ -256,6 +261,14 @@ def create_RH_vr(ds_yt, nframes=100, save_dir=None):
     sc.camera.set_focus(sc.camera.focus)
     sc.camera.zoom(1.5)
 
+    sc.add_source(lnsrc)
+
+    drot = 360./20. * 11.
+    sc.camera.rotate(drot * np.pi / 180, rot_center=ds_yt.domain_center)
+
+    if skip_render:
+        return sc
+
     vr_file = os.path.join(save_dir, "RH_rendering_0000.png")
     sc.save(vr_file, sigma_clip=3.5)
     nframes = int(nframes)
@@ -268,3 +281,41 @@ def create_RH_vr(ds_yt, nframes=100, save_dir=None):
             vr_file = os.path.join(save_dir, f"RH_rendering_{str(irlot + 1).zfill(4)}.png")
             sc.save(vr_file, sigma_clip=4)
 
+
+def build_state_line_sources(gc: tf.Transformer):
+    state_segs = []
+    for s in cartopy.feature.STATES.geometries():
+        state_segs.append(delayed(process_state)(s, gc))
+
+    state_segs = np.concatenate(compute(*state_segs))
+    colors = np.ones((state_segs.shape[0], 4))
+    colors[:, 3] = 0.1
+    lsrc = LineSource(state_segs, colors=colors)
+    return lsrc
+def transform_geom_bounds(linesegs, xy, gc: ScaledGC):
+    lons = np.array(xy[0])
+    lons[lons>180] = lons[lons>180] - 360.
+    lats = np.array(xy[1])
+
+    coords = {'latitude': lats, 'longitude': lons, gc.radial_axis: 0.0}
+    x, y, z = gc.to_transformed(**coords)
+
+    for iseg in range(len(x) - 1):
+        lineseg = [[x[iseg], y[iseg], z[iseg]], [x[iseg + 1], y[iseg + 1], z[iseg + 1]]]
+        linesegs.append(lineseg)
+    return linesegs
+
+
+def process_state(state, gc):
+    linesegs = []
+    if isinstance(state, shapely.geometry.polygon.Polygon):
+        geoms_iter = [state,]
+    elif isinstance(state, shapely.geometry.multipolygon.MultiPolygon):
+        geoms_iter = state.geoms
+    else:
+        msg = f"Unexpected geometry type: {type(state)}"
+        raise TypeError(msg)
+
+    for geom in geoms_iter:
+         linesegs = transform_geom_bounds(linesegs, geom.boundary.xy, gc)
+    return linesegs
