@@ -321,3 +321,8 @@ def process_state(state, gc):
     for geom in geoms_iter:
          linesegs = transform_geom_bounds(linesegs, geom.boundary.xy, gc)
     return linesegs
+
+def get_system_font_name():
+    from matplotlib.font_manager import findfont, FontProperties
+    font = findfont(FontProperties(family=['sans-serif']))
+    return os.path.basename(font)
