@@ -167,3 +167,4 @@ yt_xr_2024/_build/*
 
 imgui.ini
 code/volume_rendering_images/*
+code/slice_images/*

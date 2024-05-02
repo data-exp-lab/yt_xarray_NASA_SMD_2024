@@ -246,6 +246,8 @@ def create_RH_vr(ds_yt, gc:ScaledGC, nframes=100, save_dir=None, skip_render=Fal
     # Since this rendering is done in log space, the transfer function needs
     # to be specified in log space.
     tf = yt.ColorTransferFunction(np.log10(bounds))
+    tf.sample_colormap(np.log10(3*1e-6), w=0.01, colormap=cmap)
+
     for n_exp in range(-5,0):
         tf.sample_colormap(float(n_exp), w=0.01, colormap=cmap)
 
