@@ -1,17 +1,3 @@
----
-jupytext:
-  formats: md:myst
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.11.5
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
----
-
 # Recent improvements to `yt`, `yt_xarray`
 
 
@@ -19,41 +5,38 @@ kernelspec:
 
 initial setup: silencing unrelated warnings and logs for brevity here. 
 
-```{code-cell}
-import yt_xarray
-import yt
-import warnings
-warnings.filterwarnings("ignore") # silence the cartopy bounds warning
-
-yt.set_log_level(50)
-yt_xarray.utilities.logging.ytxr_log.setLevel(50) 
-```
 
 load the data. data is local file, data is from the MERRA-2 reanalysis dataset (hosted at 
 [GES DISC](https://disc.gsfc.nasa.gov/datasets/M2I3NPASM_5.12.4/summary), NASA EarthData) 
 
-```{code-cell}
+```python
+import yt_xarray
+import cartopy.feature as cfeature
+
 dsx = yt_xarray.open_dataset("sample_nc/MERRA2_100.inst3_3d_asm_Np.19800120.nc4")
 
 dsx0 = dsx.isel({'time':0})
-slc = dsx0.yt.SlicePlot('altitude', 'T', window_size=(4,2))
-slc.set_log('T', False)
-slc.set_zlim('T', 200, 300)
-_ = slc.save()
+slc = dsx0.yt.SlicePlot('altitude', 'RH', center=(800, 0.,0.))
+slc.set_log('RH', False)
+slc.render()
+slc.plots['RH'].axes.add_feature(cfeature.COASTLINE)
+slc.show()
 ```
-![](UniformGridData_Slice_altitude_T.png)
 
-**yt: geoquiver**: 
+![](./_static/images/merra2_from_yt_convenience_800_hpa.png)
 
-```{code-cell}
-ds = dsx.yt.load_grid(fields=['U', 'V'], sel_dict={'time':0}, use_callable=False)
+```python 
+import xarray as xr
+import numpy as np
+ones_da = xr.DataArray(np.ones(dsx0.RH.shape), dims=dsx0.RH.dims)
+dsx0['ones_field'] = ones_da
 
-slc = yt.SlicePlot(ds, 'altitude', 'U', window_size=(4,2))
-slc.set_log('U', False)
-slc.annotate_quiver('U', 'V')
-_ = slc.save()
+pp = dsx0.yt.PhasePlot('RH', 'T', 'ones_field', weight_field=None, fractional=True, figure_size=(3,3))
+pp.set_colorbar_label('ones_field','PDF')
+pp.set_font_size(12)
+pp.show()
+pp.save('slice_images/merra2_phase_plot.png')
 ```
-![](UniformGridData_Slice_altitude_U.png)
-**yt: cartesian cutting plane**:
 
+![](./_static/images/merra2_phase_plot.png)
 

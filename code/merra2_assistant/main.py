@@ -10,6 +10,7 @@ import cartopy
 from dask import delayed, compute
 from yt.visualization.volume_rendering.render_source import LineSource
 import shapely
+import matplotlib.pyplot as plt
 
 class ScaledGC(tf.GeocentricCartesian):
     def __init__(self,
@@ -223,7 +224,8 @@ def create_dQV_vr(ds_yt, with_rots=True):
             sc.camera.rotate(drot * np.pi / 180, rot_center=sc.camera.focus)
             sc.save(f"volume_rendering_images/rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
 
-def create_RH_vr(ds_yt, gc:ScaledGC, nframes=100, save_dir=None, skip_render=False):
+def create_RH_vr(ds_yt, gc:ScaledGC, nframes=100, save_dir=None, skip_render=False,
+                 cam_res=None):
 
     if save_dir is None:
         save_dir = "volume_rendering_images"
@@ -256,13 +258,12 @@ def create_RH_vr(ds_yt, gc:ScaledGC, nframes=100, save_dir=None, skip_render=Fal
     source.tfh.tf = tf
     source.tfh.bounds = bounds
 
-    tf_file = os.path.join(save_dir, "transfer_function.png")
-    source.tfh.plot(tf_file, profile_field=('index', 'ones'))
 
     sc.camera.north_vector = ds_yt.domain_center.d
     sc.camera.set_focus(sc.camera.focus)
     sc.camera.zoom(1.5)
-
+    if cam_res is not None:
+        sc.camera.set_resolution(cam_res)
     sc.add_source(lnsrc)
 
     drot = 360./20. * 11.
@@ -326,3 +327,60 @@ def get_system_font_name():
     from matplotlib.font_manager import findfont, FontProperties
     font = findfont(FontProperties(family=['sans-serif']))
     return os.path.basename(font)
+
+
+def plot_tf(tfh, ax=None, profile_field=None, profile_weight=None):
+    if ax is None:
+        ax = plt.gca()
+
+    if tfh.tf is None:
+        tfh.build_transfer_function()
+        tfh.setup_default()
+    tf = tfh.tf
+    if tfh.log:
+        xfunc = np.logspace
+        xmi, xma = np.log10(tfh.bounds[0]), np.log10(tfh.bounds[1])
+    else:
+        xfunc = np.linspace
+        xmi, xma = tfh.bounds
+
+    x = xfunc(xmi, xma, tf.nbins)
+    y = tf.funcs[3].y
+    w = np.append(x[1:] - x[:-1], x[-1] - x[-2])
+    colors = np.array(
+        [tf.funcs[0].y, tf.funcs[1].y, tf.funcs[2].y, np.ones_like(x)]
+    ).T
+
+
+    ax.bar(
+        x,
+        tf.funcs[3].y,
+        w,
+        edgecolor=[0.0, 0.0, 0.0, 0.0],
+        log=tfh.log,
+        color=colors,
+        bottom=[0],
+    )
+
+    if profile_field is not None:
+        try:
+            prof = tfh.profiles[tfh.field]
+        except KeyError:
+            tfh.setup_profile(profile_field, profile_weight)
+            prof = tfh.profiles[tfh.field]
+        try:
+            prof[profile_field]
+        except KeyError:
+            prof.add_fields([profile_field])
+        xplot = prof.x
+        yplot = (
+                prof[profile_field] * tf.funcs[3].y.max() / prof[profile_field].max()
+        )
+        ax.plot(xplot, yplot, color="w", linewidth=3)
+        ax.plot(xplot, yplot, color="k")
+
+    ax.set_xscale({True: "log", False: "linear"}[tfh.log])
+    ax.set_xlim(x.min(), x.max())
+    ax.set_xlabel(tfh.ds._get_field_info(tfh.field).get_label())
+    ax.set_ylabel(r"$\mathrm{alpha}$")
+    ax.set_ylim(y.max() * 1.0e-3, y.max() * 2)
