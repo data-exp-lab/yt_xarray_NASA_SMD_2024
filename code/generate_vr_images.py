@@ -11,4 +11,4 @@ dsx0, ds_yt = load_merra2_sample(bbox_dict=bbox_dict,
                                  refine_by=8,
                                  fill_value = 0.0)
 
-create_RH_vr(ds_yt)
+create_RH_vr(ds_yt, nframes=5)

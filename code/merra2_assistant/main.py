@@ -6,6 +6,7 @@ from scipy.spatial import cKDTree
 import numpy as np
 from typing import Optional, Union
 import unyt
+import os
 
 class ScaledGC(tf.GeocentricCartesian):
     def __init__(self,
@@ -219,12 +220,19 @@ def create_dQV_vr(ds_yt, with_rots=True):
             sc.camera.rotate(drot * np.pi / 180, rot_center=sc.camera.focus)
             sc.save(f"volume_rendering_images/rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
 
-def create_RH_vr(ds_yt, with_rots=True):
+def create_RH_vr(ds_yt, nframes=100, save_dir=None):
+
+    if save_dir is None:
+        save_dir = "volume_rendering_images"
+    if os.path.isdir(save_dir) is False:
+        os.mkdir(save_dir)
+
     fld = ('stream', 'RH_filtered')
-    sc = yt.create_scene(ds_yt, lens_type="perspective", field=fld)
+    cmap = "cmyt.arbre"
+
+    sc = yt.create_scene(ds_yt,  field=fld)
 
     source = sc[0]
-
     source.set_field(fld)
     source.set_log(True)
 
@@ -233,31 +241,30 @@ def create_RH_vr(ds_yt, with_rots=True):
     # Since this rendering is done in log space, the transfer function needs
     # to be specified in log space.
     tf = yt.ColorTransferFunction(np.log10(bounds))
+    for n_exp in range(-5,0):
+        tf.sample_colormap(float(n_exp), w=0.01, colormap=cmap)
 
-    tf.sample_colormap(np.log10(10**-5), w=0.01, colormap="cmyt.arbre")
-    tf.sample_colormap(np.log10(10 ** -4), w=0.01, colormap="cmyt.arbre")
-    tf.sample_colormap(np.log10(10 ** -3), w=0.01, colormap="cmyt.arbre")
-    tf.sample_colormap(np.log10(10 ** -2), w=0.01, colormap="cmyt.arbre")
-    tf.sample_colormap(np.log10(10 ** -1), w=0.01, colormap="cmyt.arbre")
-    tf.sample_colormap(np.log10(.95), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(.95), w=0.01, colormap=cmap)
 
     source.tfh.tf = tf
     source.tfh.bounds = bounds
 
-    source.tfh.plot("volume_rendering_images/transfer_function.png", profile_field=('index', 'ones'))
+    tf_file = os.path.join(save_dir, "transfer_function.png")
+    source.tfh.plot(tf_file, profile_field=('index', 'ones'))
 
     sc.camera.north_vector = ds_yt.domain_center.d
     sc.camera.set_focus(sc.camera.focus)
-    sc.camera.zoom(0.6)
+    sc.camera.zoom(1.5)
 
-    sc.save("volume_rendering_images/RH_rendering0000.png", sigma_clip=3.5)
-
-    if with_rots:
+    vr_file = os.path.join(save_dir, "RH_rendering_0000.png")
+    sc.save(vr_file, sigma_clip=3.5)
+    nframes = int(nframes)
+    if nframes > 0:
         yt.set_log_level(50)
-        nframes = 100
         total_rot = 360
         drot = total_rot / nframes
         for irlot in range(nframes):
             sc.camera.rotate(drot * np.pi / 180, rot_center=ds_yt.domain_center)
-            sc.save(f"volume_rendering_images/RH_rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
+            vr_file = os.path.join(save_dir, f"RH_rendering_{str(irlot + 1).zfill(4)}.png")
+            sc.save(vr_file, sigma_clip=4)
 
