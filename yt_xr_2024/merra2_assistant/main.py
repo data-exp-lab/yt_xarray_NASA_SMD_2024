@@ -4,102 +4,128 @@ import yt
 from yt_xarray import transformations as tf
 from scipy.spatial import cKDTree
 import numpy as np
+from typing import Optional, Union
+import unyt
 
-class KdTreeContainer:
+class ScaledGC(tf.GeocentricCartesian):
+    def __init__(self,
+                 radial_type: str = "radius",
+                 radial_axis: Optional[str] = None,
+                 r_o: Optional[Union[float, unyt.unyt_quantity]] = None,
+                 coord_aliases: Optional[dict] = None,
+                 use_neg_lons: Optional[bool] = False,
+                 radial_scale_factor: Optional[float] = 1.0,
+                 ):
+        self.radial_scale_factor = radial_scale_factor
+        if coord_aliases is None:
+            coord_aliases = {}
+        coord_aliases['lat'] = 'latitude'
+        coord_aliases['lon'] = 'longitude'
+        super().__init__(radial_type=radial_type, radial_axis=radial_axis,
+                         r_o=r_o, coord_aliases=coord_aliases, use_neg_lons=use_neg_lons)
 
-    def __init__(self, dsx0):
-        self.full_shape = dsx0.H.shape
+        self._radial_axis_id = None
+        for id, c in enumerate(self.native_coords):
+            if c == self.radial_axis:
+                self._radial_axis_id = id
+        if self._radial_axis_id is None:
+            raise RuntimeError("Could not identify radial axis id")
 
-        lons1d = dsx0.lon.to_numpy()
-        lons = np.repeat(lons1d[:, np.newaxis], dsx0.lat.size, axis=1)
-        lons = np.repeat(lons[:, :, np.newaxis], dsx0.lev.size, axis=2)
-        lons = np.transpose(lons).ravel()
+    def _calculate_transformed(self, **coords):
+        coords[self.radial_axis] = coords[self.radial_axis] * self.radial_scale_factor
+        return super()._calculate_transformed(**coords)
 
-        lats1d = dsx0.lat.to_numpy()
-        lats = np.repeat(lats1d[np.newaxis, :], dsx0.lon.size, axis=0)
-        lats = np.repeat(lats[:, :, np.newaxis], dsx0.lev.size, axis=2)
-        lats = np.transpose(lats).ravel()
-
-        heights = dsx0.H.to_numpy().ravel()
-        self.ids = np.arange(heights.size)
-        self.finite_mask = np.isfinite(heights)
-        self.finite_ids = self.ids[self.finite_mask]
+    def _calculate_native(self, **coords):
+        result = super()._calculate_native(**coords)
+        new_result = [r for r in result]
+        new_result[self._radial_axis_id] = new_result[self._radial_axis_id] / self.radial_scale_factor
+        return tuple(new_result)
 
 
-        heights_n = self._get_normalized(heights[self.finite_mask], 'height')
-        lats_n = self._get_normalized(lats[self.finite_mask], 'lat')
-        lons_n = self._get_normalized(lons[self.finite_mask], 'lon')
+def get_subregion(dsx0, bbox_dict):
+    sel_dict = {}
+    for shrt, lng in zip(['lat', 'lon'], ['latitude', 'longitude']):
+        val_rng = bbox_dict[lng]
+        xr_da = getattr(dsx0, shrt)
+        good_vals = xr_da.where(np.logical_and(xr_da >= val_rng[0], xr_da <= val_rng[1]), drop=True)
+        sel_dict[shrt] = good_vals
 
-        self.tree = cKDTree(np.column_stack([heights_n, lats_n, lons_n]))
+    ds_sub_region = dsx0.sel(sel_dict)
+    return ds_sub_region
+def add_horizontal_mean(dsx0, bbox_dict):
 
-    def _get_normalized(self, vals, dim: str):
-        return vals
-
-def add_horizontal_mean(dsx0):
+    ds_sub_region = get_subregion(dsx0, bbox_dict)
 
     for op in ('mean', 'max', 'min'):
-        func_handle = getattr(dsx0.QV, op)
+        func_handle = getattr(ds_sub_region.QV, op)
         QV_val = func_handle(dim=['lat', 'lon']).to_numpy()
         QV_val = np.repeat(QV_val[:, np.newaxis], dsx0.lat.size, axis=1)
         QV_val = np.repeat(QV_val[:, :, np.newaxis], dsx0.lon.size, axis=2)
         da = xr.DataArray(QV_val, dims=('lev', 'lat', 'lon'))
         dsx0[f"QV_{op}"] = da
 
+def attach_altitude_dep_vars(dsx0: xr.Dataset, fields: tuple =None):
+    # for 3D rendering, going to take the mean height at each level as
+    # the altitude and add variables with altitude as dimension
+    # instead of level.
+    if fields is None:
+        fields = ('QV', 'T', 'QV_mean', 'QV_max', 'QV_min')
+
+    altitude = dsx0.H.mean(dim=['lat', 'lon'])
+    for field in fields:
+        if field in dsx0.data_vars:
+            vals = xr.DataArray(dsx0.data_vars[field].to_numpy(),
+                                dims=('altitude', 'lat', 'lon'),
+                                coords={'altitude': altitude.to_numpy()})
+
+            dsx0[f"{field}_by_alt"] = vals
 
 
 def load_merra2_sample(time_index:int = 0, bbox_dict = None,
                        virtual_alt_scale = 10.0,
-                       grid_resolution = None):
-    dsx = yt_xarray.open_dataset("sample_nc/MERRA2_100.inst3_3d_asm_Np.19800120.nc4")
-    dsx0 = dsx.isel({'time':time_index})
-    add_horizontal_mean(dsx0)
+                       grid_resolution = None,
+                       refine_grid=True,
+                       refine_by=2,
+                       refine_min_grid_size=16,
+                       refine_max_iters=2000,
+                       fill_value=np.nan
+                       ):
 
-    ro = 6371*1e3
-    gc = tf.GeocentricCartesian(radial_type='altitude',
-                                r_o=ro,
-                                use_neg_lons=True, )
-
-    kdTree_holder = KdTreeContainer(dsx0)
-    def interp_at_height(data: xr.DataArray, coords):
-        v_alt = coords[0]
-        height = v_alt / virtual_alt_scale
-        # print(height.max())
-        # print(height.min())
-        lat = coords[1]
-        lon = coords[2]
-
-        sample_points = np.column_stack([height, lat, lon])
-        d, sub_ids = kdTree_holder.tree.query(sample_points, k=1)
-        full_ids = kdTree_holder.finite_ids[sub_ids]
-
-        lev_id, lat_id, lon_id = np.unravel_index(full_ids, kdTree_holder.full_shape)
-
-        lev_id = xr.DataArray(lev_id, dims='points')
-        lat_id = xr.DataArray(lat_id, dims='points')
-        lon_id = xr.DataArray(lon_id, dims='points')
-
-        return data.isel({'lev': lev_id, 'lat': lat_id, 'lon': lon_id})
-
-    if grid_resolution is None:
-        grid_resolution = (128, 128, 128)
     if bbox_dict is None:
         bbox_dict = {'latitude': [-1., 1.],
                      'longitude': [-90., -88.],
                      'altitude': [0., 70 * 1e3]}
 
-    bbox_dict['altitude'] = [bbox_dict['altitude'][0]* virtual_alt_scale,
-                             bbox_dict['altitude'][1] * virtual_alt_scale
-                             ]
+    dsx = yt_xarray.open_dataset("sample_nc/MERRA2_100.inst3_3d_asm_Np.19800120.nc4")
+    dsx0 = dsx.isel({'time':time_index})
+    add_horizontal_mean(dsx0, bbox_dict=bbox_dict)
 
+    fields = ('T', 'H', 'U', 'V', 'QV', 'QV_max', 'QV_min', 'QV_mean', 'RH')
+    fields_for_yt = tuple([f"{fld}_by_alt" for fld in fields])
+    attach_altitude_dep_vars(dsx0, fields=fields)
+
+    ro = 6371*1e3
+
+    gc = ScaledGC(radial_type='altitude',
+                  r_o = ro,
+                  use_neg_lons=True,
+                  radial_scale_factor=virtual_alt_scale)
+
+    if grid_resolution is None:
+        grid_resolution = (128, 128, 128)
 
     ds_yt = tf.build_interpolated_cartesian_ds(
         dsx0,
         gc,
-        fields=('T', 'H', 'U', 'V', 'QV', 'QV_max', 'QV_min', 'QV_mean'),
+        fields=fields_for_yt,
         bbox_dict=bbox_dict,
         grid_resolution=grid_resolution,
-        interp_method='interpolate',
-        interp_func=interp_at_height,
+        interp_method='nearest',
+        refine_grid=refine_grid,
+        refine_by=refine_by,
+        refine_min_grid_size=refine_min_grid_size,
+        refine_max_iters = refine_max_iters,
+        fill_value=fill_value,
     )
 
     add_extra_fields(ds_yt)
@@ -108,9 +134,9 @@ def load_merra2_sample(time_index:int = 0, bbox_dict = None,
 
 def add_extra_fields(ds_yt):
     def _QV_for_proj(field, data):
-        QV = data['stream', 'QV']
+        QV = data['stream', 'QV_by_alt']
         QV_clean = QV.copy()
-        QV_clean[~np.isfinite(QV_clean)] = 0.0
+        QV_clean[np.isnan(QV_clean)] = 0.0
         return QV_clean
 
     ds_yt.add_field(
@@ -121,8 +147,16 @@ def add_extra_fields(ds_yt):
     )
 
     def _dQV(field, data):
-        rng = data['stream', 'QV_max'] - data['stream', 'QV_min']
-        dQV_n = (data['stream', 'QV'] - data['stream', 'QV_min'])/rng
+        rng = data['stream', 'QV_max_by_alt'] - data['stream', 'QV_min_by_alt']
+        QV_n = data['stream', 'QV_n']
+
+        dQV_n = QV_n - data['stream', 'QV_min_by_alt']
+
+        dQV_n[rng>0] = dQV_n[rng>0] / rng[rng>0]
+        dQV_n[np.isnan(dQV_n)] = 0.0
+        dQV_n[dQV_n<0] = 0.0
+
+
         return dQV_n
 
     ds_yt.add_field(
@@ -132,4 +166,98 @@ def add_extra_fields(ds_yt):
         units="",
     )
 
+    def _RH_for_proj(field, data):
+        RH = data['stream', 'RH_by_alt']
+        RH[np.isnan(RH)] = 0.0
+        RH[RH==0.0] = 1e-12
+        return RH
+
+    ds_yt.add_field(
+        name=("stream", "RH_filtered"),
+        function=_RH_for_proj,
+        sampling_type="cell",
+        units="",
+    )
+
+
+def create_dQV_vr(ds_yt, with_rots=True):
+    fld = ('stream', 'dQV_n')
+    sc = yt.create_scene(ds_yt, lens_type="perspective", field=fld)
+
+    source = sc[0]
+
+    source.set_field(fld)
+    source.set_log(False)
+
+    bounds = (0, 1.0)
+
+    # Since this rendering is done in log space, the transfer function needs
+    # to be specified in log space.
+    tf = yt.ColorTransferFunction(bounds)
+
+    tf.sample_colormap(.6, w=0.0005, colormap="cmyt.arbre")
+    tf.sample_colormap(.4, w=0.0005, colormap="cmyt.arbre")
+    tf.sample_colormap(.9, w=0.0005, colormap="cmyt.arbre")
+
+    source.tfh.tf = tf
+    source.tfh.bounds = bounds
+
+    source.tfh.plot("volume_rendering_images/transfer_function.png", profile_field=('index', 'ones'))
+
+    sc.camera.north_vector = ds_yt.domain_center.d
+    sc.camera.set_focus(sc.camera.focus)
+    sc.camera.zoom(0.6)
+
+    sc.save("volume_rendering_images/rendering0000.png", sigma_clip=4)
+
+    if with_rots:
+        yt.set_log_level(50)
+        nframes = 100
+        total_rot = 360
+        drot = total_rot / nframes
+        for irlot in range(nframes):
+            sc.camera.rotate(drot * np.pi / 180, rot_center=sc.camera.focus)
+            sc.save(f"volume_rendering_images/rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
+
+def create_RH_vr(ds_yt, with_rots=True):
+    fld = ('stream', 'RH_filtered')
+    sc = yt.create_scene(ds_yt, lens_type="perspective", field=fld)
+
+    source = sc[0]
+
+    source.set_field(fld)
+    source.set_log(True)
+
+    bounds = (1e-6, 1)
+
+    # Since this rendering is done in log space, the transfer function needs
+    # to be specified in log space.
+    tf = yt.ColorTransferFunction(np.log10(bounds))
+
+    tf.sample_colormap(np.log10(10**-5), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(10 ** -4), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(10 ** -3), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(10 ** -2), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(10 ** -1), w=0.01, colormap="cmyt.arbre")
+    tf.sample_colormap(np.log10(.95), w=0.01, colormap="cmyt.arbre")
+
+    source.tfh.tf = tf
+    source.tfh.bounds = bounds
+
+    source.tfh.plot("volume_rendering_images/transfer_function.png", profile_field=('index', 'ones'))
+
+    sc.camera.north_vector = ds_yt.domain_center.d
+    sc.camera.set_focus(sc.camera.focus)
+    sc.camera.zoom(0.6)
+
+    sc.save("volume_rendering_images/RH_rendering0000.png", sigma_clip=3.5)
+
+    if with_rots:
+        yt.set_log_level(50)
+        nframes = 100
+        total_rot = 360
+        drot = total_rot / nframes
+        for irlot in range(nframes):
+            sc.camera.rotate(drot * np.pi / 180, rot_center=ds_yt.domain_center)
+            sc.save(f"volume_rendering_images/RH_rendering{str(irlot + 1).zfill(4)}.png", sigma_clip=4)
 

@@ -1,7 +1,6 @@
 jupyter-book
 git+https://github.com/chrishavlin/yt_xarray.git@transformations_take2
 yt[full]
-git+https://github.com/yt-project/yt.git
 dask[complete]
-pyppeteer
-
+juptyerlab
+yt_idv
