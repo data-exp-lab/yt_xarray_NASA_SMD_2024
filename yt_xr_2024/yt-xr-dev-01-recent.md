@@ -9,7 +9,7 @@ initial setup: silencing unrelated warnings and logs for brevity here.
 load the data. data is local file, data is from the MERRA-2 reanalysis dataset (hosted at 
 [GES DISC](https://disc.gsfc.nasa.gov/datasets/M2I3NPASM_5.12.4/summary), NASA EarthData) 
 
-```
+```python
 import yt_xarray
 import cartopy.feature as cfeature
 
@@ -25,7 +25,7 @@ slc.show()
 
 ![](./_static/images/merra2_from_yt_convenience_800_hpa.png)
 
-```
+```python
 import xarray as xr
 import numpy as np
 ones_da = xr.DataArray(np.ones(dsx0.RH.shape), dims=dsx0.RH.dims)
