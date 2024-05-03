@@ -1,9 +1,9 @@
 # Table of contents
 # Learn more at https://jupyterbook.org/customize/toc.html
 
-format: jb-book
+format: jb-article
 root: intro
-chapters:
+sections:
 - file: intro-to-yt-xr-and-yt-xr
 - file: yt-xr-dev-01-recent
 - file: yt-xr-dev-02-transformations

@@ -1,21 +1,21 @@
 # Utilizing Cloud Native data formats with yt_xarray 
 
+![](_static/images/yt_xr_zarr_flowchart.png)
+
 One of the benefits of linking `yt` to `xarray` dynamically is the access to the 
 well-developed methods within `xarray` to work with a range of file types, in particular
 cloud-native formats like `Zarr` (CITATION). Additionally, because `yt_xarray` is careful 
 to delay data reads until required while maintaining links to the underlying `xarray`
 dataset, the chunked reading possible with `Zarr` (or dask arrays).  
 
-The following flow cart illustrates the steps and objects involved in the `yt`-`xarray`-`Zarr`
+The flow chart above illustrates the steps and objects involved in the `yt`-`xarray`-`Zarr`
 workflow. The steps visible to the user are at left: (1) load a dataset, (2) construct a slice plot 
 and then return an image. Behind the scenes, initially loading a `yt_xarray` dataset links the underlying `xarray` dataset within
 a standard `yt` dataset and initializes the `yt` grid hierarchy. When a `yt` selection method
 is applied, such as creating a slice plot (or extracting data from a geometric subselection), `yt`
 first identifies grids within the hierarchy that intersect the selection object. For each grid
 that is intersected (and only for those intersected), `yt` will fetch data at those grid cells. 
-At this point, `yt` will request data from the underlying `xarray` dataset. 
-
-![](_static/images/yt_xr_zarr_flowchart.png)
+At this point, `yt` will request data from the underlying `xarray` dataset.
 
 At present, we are focusing on a number of complimentary avenues of development and research to improve analysis of cloud-native data with `yt` and `yt_xarray`. First, we are composite a set of tutorial notebooks demonstrating analysis workflows with `yt_xarray` that utilize subsets of cloud-hosted NASA Earth Observation Data in order to increase awareness and uptake of the current functionality. Additionally, we are investigating approaches to reading Zarr files from `yt` for both smoothed-particle hydrodynamics (SPH) simulation output and AMR grid structures.
 
