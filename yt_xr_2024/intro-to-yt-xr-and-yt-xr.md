@@ -1,18 +1,7 @@
 # Introduction
 
-Overview of the project. 
+`yt` is a Open Source Python package for analysis and visualization of volumetric data. It was originally written for analysis of multi-resolution astrophysical simulation outputs and has expanded its use cases into additional domains such as geodynamics, geophysics, weather simulation and engineering. `yt` can ingest data from a wide range of data structures including AMR grid patches, Octree structures, smoothed-particle hydrodynamic output and unstructured meshes. Additionally, a large portion of the methods in `yt` are parallelized with MPI and commonly used in HPC systems for analysis of simulation data. 
 
-Overview of the primary software pieces:  
+Recent efforts to improve the use of `yt` in geoscience domains have focused on improving documentation (Havlin et al., 2020, 2021) and improving interoperability with other Python packages which has resulted in the `yt_xarray` package. `xararay` is a popular metadata-preserving array library with support for a large number of file formats including traditional formats like netCDF and HDF but also newer cloud optimized storage solutions like Zarr arrays. 
 
-## `xarray`
-
-xarray: words: geo, NASA, cloud-native formats (zarr)
-
-## `yt`
-
-more words 
-
-## `yt_xarray`
-
-more words
-
+The work presented here describes recent improvements to `yt_xarray`, most notably, the introduction of a coordinate transformation framework to simplify the steps required to utilize any of the methods in `yt` that rely on ray tracing (such as Volume Rendering). We also describe current efforts to leverage Zarr within the `yt` framework, both indirectly through the `xarray` backend exposed by `yt_xarray` and more directly within `yt` to access chunked particle data and multi-resolution grid structures.

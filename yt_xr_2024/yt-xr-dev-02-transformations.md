@@ -17,7 +17,7 @@ The general workflow is
 3. define the method of interpolation
 4. initialize the yt dataset 
 
-5. In pseudo-code, the above steps look like:
+In pseudo-code, the above steps look like:
 
 ```python
 import yt_xarray 
@@ -53,14 +53,15 @@ divided in half along each dimension and grid cells are filled with a binary ima
 where cell values are set to 1 if they fall within the bounds of the non-cartesian 
 geometry. Division proceeds recursively, with empty grids being discarded, until the
 remaining grids satisfy an adjustable fill criteria (or the max number of iterations
-has been reached). In addition to the recursive bisection, one may use an implementation 
-of **CITATION  (berger and rigoutsos 1991, https://doi.org/10.1109/21.120081)** 
+has been reached). In addition to the recursive bisection, an implementation 
+of the grid refinement algorithim of Berger and Rigoutsos (1991) is available to use 
 by setting `refinement_method='signature_filter'`. 
 
 In the following, two examples with real datasets are described, with images from 
 sequential stages of the above transformation workflow along with a final 3D volume
 rendering. The first example uses a seismic tomography model of the Earth's upper 
-mantle beneath the Western U.S. **CITATION**, while the second uses a MERRA-2 netcdf file from **CITATION**. 
+mantle beneath the Western U.S. (Schmandt and Humphreys, 2010), while the second 
+uses a locally downloaded 3D MERRA-2 reanalysis data file (Global Modeling and Assimilation Office, 2015). 
 
 ## Volume Rendering Workflow: Seismic Tomography
 
@@ -91,39 +92,26 @@ consists of a number of gaussian samples of the data spaced linearlly between 0.
 northeast Idaho and northwest Wymoing, where high temperatures and partially molten 
 rock decrease the shear wave speed
 
-In pseudo, code the above steps are
-
-
-The full code is available at [code repository associated with these materials](https://github.com/data-exp-lab/yt_xarray_NASA_SMD_2024). 
 
 ## Volume Rendering Workflow: Atmospheric Geophysics, MERRA-2
 
-The second example demonstrates some of the difficulty of volume rendering with 
-geophysical data. In addition to having to interpolate to cartesian coordinates, 
-the vertical length scale present in data
-
-MERRA-2 example
+The second example demonstrates an example with a 3D atmospheric field using data from MERRA-2.
+Due to the small radial length scale of the atmosphere compared to the features being rendered, an
+additional radial scale factor is applied in transforming to virtual cartesian coordinates. 
 
 ![](_static/images/merra2_vr_composite.png)
 
-(a) Data defined in (pressure level, latitude, longitude). Relative humidity 
+(a) Again, data is initially loaded with `xarray` in native coordinates and a plot of relative humidty (RH) at 800 hPa is made using the `SlicePlot` convenience method. 
 
-(b) Transformation here: pressure level to height, apply a radial scale factor and then
-convert to "virtual" cartesian coordinates. 
-
-(c) The volume rendering here caputres the coherence of the high relative humidity 
-features in 3D. Also, missing data is a challenge for volume rendering: set to 0.0 
-and transfer function chosen to exclude those 0.0 values. 
-
-The following image further illustrates the difficulty of volume rendering with short relative radial length
-scales:
+(b) Defining the transformation in this case is more complicated than the previous case. The data here is defined with dimensions of (pressure level, latitude, longitude) and so an additional transformation from pressure level to altitude is required. Additionally, the radial scale of the atmosphere is small compared to the longitudinal and latitudinal distances of interest here. If we were to transform to geocentric cartesian coordinates, the atmosphere would be very difficult to resolve, as illustrated in panel (a) of the following image:
 
 ![](_static/images/combo_merra2_interp_slices.png)
 
-In panel (a), a cartesian grid is constructed from the raw data subsample, 
-without applying any vertical exaggeration factor. Over the length scales required 
-to capture features of interest (tens of degrees), the relative thickness of the
-atmosphere is difficult to resolve (the grid refinement actually breaks down and misses
-some points). Panels (b) and (c) demonstrate the same data with a radial scale factor of 20., 
-resulting in a virtual cartesian grid that can reasonably resolve features within the 
-atmosphere.
+For the purposes of volume rendering, we can overcome this issue by applying a radial 
+scale factor: panel (b) shows a scale factor of 20 and (c) shows the same without 
+the grid annotations. So to create our cartesian `yt` dataset that contains the `xarray`
+dataset in native geometry, we first must implement a pressure-to-height transformation and then utilize a scaled geodetic to cartesian transformation. Both of these transformations could be contained within a single transformation object, but because this particular MERRA-2 file contains a height variable, the actual implementation can be simplified slightly. In addition to the transformation considerations, the RH field ocntains missing values identify by NaN values. Because projections in `yt` do not yet handle `NaN` values well, the interpolation here fills in missing values with a small non-negative number. 
+
+(c) Returning to the volume rendering workflow image, once a cartesian yt dataset is initialized, we can again utilize the volume rendering methods. In this case, a logarithmic transfer function highlights a number of relative humidity values (within the range of actual data and avoiding the small nonzero filler used for missing values). 
+
+**In summary,** the embedded transformation framework within `yt_xarray` also convenient access to methods in `yt` that require a dataset in cartesian coordinates. A cartesian grid (or grids if using refinement) is built to wrap the underlying non-cartesian geometry and data is read and interpolated onto the cartesian grid on-demand by chunks using the linked xarray dataset.
