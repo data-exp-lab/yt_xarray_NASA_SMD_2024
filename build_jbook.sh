@@ -13,7 +13,9 @@ if [[ $OPSTRNG == *"help"* ]] || [[ "$OPSTRNG" = "-h" ]]; then
   echo "    $ ./build_pdf.sh clean"
   echo "To rebuild pdf"
   echo "    $ ./build_pdf.sh build"
-  echo "To clean and rebuild:"
+  echo "To build html"
+  echo "    $ ./build_pdf.sh html"
+  echo "To run multiple, use comma separated list:"
   echo "    $ ./build_pdf.sh clean,build"
   echo "\n"
 fi
@@ -29,3 +31,6 @@ if [[ $OPSTRNG == *"build"* ]]; then
   echo "Copied pdfoutput to yt_xr_2024.pdf"
 fi
 
+if [[ $OPSTRNG == *"html"* ]]; then
+  jupyter-book build yt_xr_2024/
+fi
